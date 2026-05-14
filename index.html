@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Elyas Turbo Car V5</title>
+<style>
+*{box-sizing:border-box}
+body{
+margin:0;
+background:radial-gradient(circle at top,#0ea5e9,#1e1b4b,#020617);
+font-family:Arial,sans-serif;
+display:flex;
+justify-content:center;
+align-items:center;
+min-height:100vh;
+overflow:hidden;
+color:white;
+}
+.wrap{width:min(1000px,97vw);text-align:center}
+h1{font-size:44px;margin:8px 0;text-shadow:0 0 20px #fff}
+canvas{
+width:100%;
+border-radius:24px;
+border:3px solid rgba(255,255,255,.35);
+box-shadow:0 0 50px rgba(0,0,0,.6);
+}
+button{
+margin-top:10px;
+padding:12px 24px;
+border-radius:999px;
+border:none;
+background:#facc15;
+font-weight:bold;
+font-size:18px;
+cursor:pointer;
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+<h1>🔥 Elyas Turbo Car V5</h1>
+<canvas id="game" width="960" height="440"></canvas>
+<button onclick="restart()">Neu starten</button>
+</div>
+
+<script>
+const canvas=document.getElementById("game");
+const ctx=canvas.getContext("2d");
+
+let car,coins,rocks,particles;
+let score=0,money=0,speed=6,frame=0,gameOver=false,started=false;
+let nitro=0,flash=0;
+
+function sound(freq,duration,type="sine",vol=0.03){
+ const a=new(window.AudioContext||window.webkitAudioContext)();
+ const o=a.createOscillator();
+ const g=a.createGain();
+ o.type=type;
+ o.frequency.value=freq;
+ g.gain.value=vol;
+ o.connect(g);
+ g.connect(a.destination);
+ o.start();
+ o.stop(a.currentTime+duration);
+}
+
+function reset(){
+car={x:100,y:300,w:100,h:48,vy:0,onGround:true};
+coins=[];rocks=[];particles=[];
+score=0;money=0;speed=6;frame=0;
+gameOver=false;started=false;
+nitro=0;flash=0;
+}
+reset();
+
+function jump(){
+if(gameOver){restart();return;}
+started=true;
+if(car.onGround){
+car.vy=-18;
+car.onGround=false;
+sound(180,.08,"square",0.05);
+for(let i=0;i<15;i++){
+particles.push({x:car.x+20,y:car.y+40,vx:(Math.random()-.5)*8,vy:(Math.random()-.5)*8,life:25,color:"#fff"});
+}
+}
+}
+document.addEventListener("keydown",e=>{
+if(e.code==="Space"||e.code==="ArrowUp")jump();
+});
+canvas.addEventListener("pointerdown",jump);
+
+function restart(){reset();started=true;}
+
+function rr(x,y,w,h,r){
+ctx.beginPath();
+ctx.roundRect(x,y,w,h,r);
+ctx.fill();
+}
+
+function hit(a,b){
+return a.x<b.x+b.w&&a.x+a.w>b.x&&a.y<b.y+b.h&&a.y+a.h>b.y;
+}
+
+function update(){
+frame++;
+
+particles.forEach(p=>{
+p.x+=p.vx;
+p.y+=p.vy;
+p.life--;
+});
+particles=particles.filter(p=>p.life>0);
+
+if(flash>0)flash--;
+
+if(!started||gameOver)return;
+
+score+=0.1;
+speed=6+Math.floor(score/20);
+
+if(nitro>0){
+nitro--;
+speed+=2;
+}
+
+car.vy+=0.85;
+car.y+=car.vy;
+
+if(car.y>=300){
+car.y=300;
+car.vy=0;
+car.onGround=true;
+}
+
+if(frame%70===0){
+coins.push({x:980,y:180+Math.random()*120,r:15,t:0});
+}
+if(frame%85===0){
+rocks.push({x:980,y:310,w:40+Math.random()*30,h:40});
+}
+
+coins.forEach(c=>{
+c.x-=speed;
+c.t+=0.15;
+});
+rocks.forEach(r=>r.x-=speed);
+
+coins=coins.filter(c=>c.x>-50&&!c.got);
+rocks=rocks.filter(r=>r.x>-80);
+
+for(const c of coins){
+const dx=(car.x+50)-c.x;
+const dy=(car.y+20)-c.y;
+if(Math.sqrt(dx*dx+dy*dy)<55){
+c.got=true;
+money++;
+score+=2;
+nitro=120;
+flash=6;
+sound(880,.08,"triangle",0.05);
+
+for(let i=0;i<18;i++){
+particles.push({x:c.x,y:c.y,vx:(Math.random()-.5)*10,vy:(Math.random()-.5)*10,life:30,color:"#facc15"});
+}
+}
+}
+
+for(const r of rocks){
+if(hit(car,r)){
+gameOver=true;
+flash=15;
+sound(80,.4,"sawtooth",0.08);
+
+for(let i=0;i<40;i++){
+particles.push({x:r.x,y:r.y,vx:(Math.random()-.5)*12,vy:(Math.random()-.5)*12,life:40,color:"#ef4444"});
+}
+}
+}
+}
+
+function drawCar(){
+ctx.save();
+ctx.translate(car.x,car.y);
+
+if(nitro>0){
+ctx.fillStyle="#f97316";
+ctx.beginPath();
+ctx.moveTo(-20,25);
+ctx.lineTo(-55,10);
+ctx.lineTo(-40,25);
+ctx.lineTo(-55,40);
+ctx.fill();
+}
+
+ctx.fillStyle=nitro>0?"#facc15":"#22c55e";
+rr(0,10,100,36,12);
+
+ctx.fillStyle="#16a34a";
+rr(20,0,45,24,10);
+
+ctx.fillStyle="#bae6fd";
+rr(30,5,22,12,5);
+
+ctx.fillStyle="#111827";
+ctx.beginPath();
+ctx.arc(24,46,12,0,Math.PI*2);
+ctx.arc(76,46,12,0,Math.PI*2);
+ctx.fill();
+
+ctx.fillStyle="white";
+ctx.font="bold 18px Arial";
+ctx.fillText("E",72,32);
+
+ctx.restore();
+}
+
+function draw(){
+const bg=ctx.createLinearGradient(0,0,0,440);
+bg.addColorStop(0,"#38bdf8");
+bg.addColorStop(.55,nitro>0?"#f97316":"#2563eb");
+bg.addColorStop(1,"#020617");
+
+ctx.fillStyle=bg;
+ctx.fillRect(0,0,960,440);
+
+ctx.fillStyle="rgba(255,255,255,.15)";
+for(let x=(-frame*speed)%70;x<960;x+=70){
+ctx.fillRect(x,390,35,6);
+}
+
+ctx.fillStyle="#1f2937";
+ctx.fillRect(0,360,960,80);
+
+coins.forEach(c=>{
+ctx.save();
+ctx.translate(c.x,c.y);
+ctx.scale(1+Math.sin(c.t)*.18,1);
+ctx.fillStyle="#facc15";
+ctx.beginPath();
+ctx.arc(0,0,c.r,0,Math.PI*2);
+ctx.fill();
+ctx.fillStyle="#111";
+ctx.font="bold 16px Arial";
+ctx.textAlign="center";
+ctx.fillText("€",0,6);
+ctx.restore();
+});
+
+rocks.forEach(r=>{
+ctx.fillStyle="#ef4444";
+rr(r.x,r.y,r.w,r.h,10);
+});
+
+drawCar();
+
+particles.forEach(p=>{
+ctx.globalAlpha=p.life/40;
+ctx.fillStyle=p.color;
+ctx.fillRect(p.x,p.y,5,5);
+ctx.globalAlpha=1;
+});
+
+ctx.fillStyle="rgba(0,0,0,.4)";
+rr(15,15,300,100,20);
+
+ctx.fillStyle="white";
+ctx.font="bold 24px Arial";
+ctx.fillText("Score: "+Math.floor(score),35,50);
+ctx.fillText("💰 Kohle: "+money,35,85);
+
+if(nitro>0){
+ctx.fillStyle="#facc15";
+ctx.font="bold 30px Arial";
+ctx.fillText("⚡ NITRO BOOST",650,55);
+}
+
+if(!started){
+ctx.fillStyle="rgba(0,0,0,.55)";
+ctx.fillRect(0,0,960,440);
+ctx.textAlign="center";
+ctx.fillStyle="white";
+ctx.font="bold 50px Arial";
+ctx.fillText("ELYAS TURBO CAR",480,170);
+ctx.font="24px Arial";
+ctx.fillText("Tippen oder Leertaste drücken",480,230);
+ctx.textAlign="left";
+}
+
+if(gameOver){
+ctx.fillStyle="rgba(0,0,0,.7)";
+ctx.fillRect(0,0,960,440);
+ctx.textAlign="center";
+ctx.fillStyle="#facc15";
+ctx.font="bold 60px Arial";
+ctx.fillText("CRASH!",480,170);
+ctx.fillStyle="white";
+ctx.font="26px Arial";
+ctx.fillText("Score: "+Math.floor(score)+"  Kohle: "+money,480,230);
+ctx.fillText("Tippen zum Neustart",480,280);
+ctx.textAlign="left";
+}
+
+if(flash>0){
+ctx.fillStyle="rgba(255,255,255,.18)";
+ctx.fillRect(0,0,960,440);
+}
+}
+
+function loop(){
+update();
+draw();
+requestAnimationFrame(loop);
+}
+loop();
+</script>
+</body>
+</html>
