@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Elias Car Runner V4</title>
+<style>
+*{box-sizing:border-box}
+body{
+  margin:0;
+  min-height:100vh;
+  display:flex;
+  justify-content:center;
+  align-items:center;
+  background:radial-gradient(circle at top,#06b6d4,#1e1b4b 55%,#020617);
+  color:white;
+  font-family:Arial, sans-serif;
+  overflow:hidden;
+}
+.wrap{width:min(1000px,97vw);text-align:center}
+h1{margin:8px 0 3px;font-size:42px;text-shadow:0 5px 20px #000}
+.sub{opacity:.9;margin-bottom:9px}
+canvas{
+  width:100%;
+  height:auto;
+  border-radius:26px;
+  border:3px solid rgba(255,255,255,.35);
+  box-shadow:0 25px 70px rgba(0,0,0,.55);
+  touch-action:manipulation;
+}
+button{
+  margin-top:10px;
+  padding:12px 24px;
+  border:0;
+  border-radius:999px;
+  background:#facc15;
+  color:#111;
+  font-size:17px;
+  font-weight:bold;
+  cursor:pointer;
+}
+.hint{font-size:14px;opacity:.85;margin-top:7px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>🚗 Elyas Turbo Car V4</h1>
+  <div class="sub">Auto · Nitro · Mystery-Box · Magnet · Schild · Raketen</div>
+  <canvas id="game" width="960" height="440"></canvas>
+  <button onclick="restart()">Neu starten</button>
+  <div class="hint">PC: Leertaste / Pfeil hoch · Handy: Tippen</div>
+</div>
+
+<script>
+const canvas=document.getElementById("game");
+const ctx=canvas.getContext("2d");
+
+let car, obstacles, coins, boxes, rockets, particles, stars;
+let score, money, speed, level, gameOver, started, frame, best;
+let nitro=0, shield=0, magnet=0, surpriseText="", surpriseTimer=0;
+
+best=Number(localStorage.getItem("elias_car_v4_best")||0);
+
+function reset(){
+  car={x:95,y:296,w:92,h:48,vy:0,onGround:true};
+  obstacles=[]; coins=[]; boxes=[]; rockets=[]; particles=[];
+  stars=Array.from({length:70},()=>({x:Math.random()*960,y:Math.random()*230,s:Math.random()*2+0.5}));
+  score=0; money=0; speed=5.5; level=1; frame=0; gameOver=false; started=false;
+  nitro=0; shield=0; magnet=0; surpriseText=""; surpriseTimer=0;
+}
+reset();
+
+function jump(){
+  if(gameOver){restart();return;}
+  started=true;
+  if(car.onGround){
+    car.vy=-17.8;
+    car.onGround=false;
+    burst(car.x+25,car.y+48,"#e0f2fe",16);
+  }
+}
+document.addEventListener("keydown",e=>{if(e.code==="Space"||e.code==="ArrowUp")jump();});
+canvas.addEventListener("pointerdown",jump);
+function restart(){reset();started=true;}
+
+function burst(x,y,color,n){
+  for(let i=0;i<n;i++)particles.push({x,y,vx:(Math.random()-.5)*8,vy:(Math.random()-.5)*8,life:28,color});
+}
+function rr(x,y,w,h,r){
+  ctx.beginPath(); ctx.roundRect(x,y,w,h,r); ctx.fill();
+}
+function addObstacle(){
+  const h=38+Math.random()*62;
+  obstacles.push({x:990,y:360-h,w:38+Math.random()*24,h});
+}
+function addCoin(){
+  coins.push({x:990,y:165+Math.random()*130,r:15,t:0});
+}
+function addBox(){
+  boxes.push({x:990,y:250+Math.random()*50,w:42,h:42,t:0});
+}
+function addRocket(){
+  rockets.push({x:990,y:245+Math.random()*75,w:62,h:24});
+}
+function hit(a,b){
+  return a.x<b.x+b.w && a.x+a.w>b.x && a.y<b.y+b.h && a.y+a.h>b.y;
+}
+function surprise(name){
+  surpriseText=name;
+  surpriseTimer=90;
+}
+function collectBox(){
+  const r=Math.random();
+  if(r<.34){nitro=180; surprise("⚡ NITRO TURBO!");}
+  else if(r<.67){shield=220; surprise("🛡️ SCHILD AKTIV!");}
+  else {magnet=250; surprise("🧲 MAGNET KOHLE!");}
+}
+
+function update(){
+  frame++;
+  stars.forEach(s=>{s.x-=speed*.13;if(s.x<0){s.x=960;s.y=Math.random()*230}});
+  particles.forEach(p=>{p.x+=p.vx;p.y+=p.vy;p.life--;});
+  particles=particles.filter(p=>p.life>0);
+  if(surpriseTimer>0)surpriseTimer--;
+
+  if(!started||gameOver)return;
+
+  score+=0.09;
+  level=score>85?3:score>35?2:1;
+  speed=5.5+level*1.25+Math.floor(score/22)*.55;
+  if(nitro>0){nitro--; speed+=2.4;}
+  if(shield>0)shield--;
+  if(magnet>0)magnet--;
+
+  car.vy+=0.85;
+  car.y+=car.vy;
+  if(car.y>=296){car.y=296;car.vy=0;car.onGround=true;}
+
+  if(frame%Math.max(36,86-level*13)===0)addObstacle();
+  if(frame%58===0)addCoin();
+  if(frame%260===0)addBox();
+  if(level>=2 && frame%165===0)addRocket();
+
+  obstacles.forEach(o=>o.x-=speed);
+  coins.forEach(c=>{c.x-=speed;c.t+=.16;});
+  boxes.forEach(b=>{b.x-=speed;b.t+=.18;});
+  rockets.forEach(r=>r.x-=speed+2.3);
+
+  obstacles=obstacles.filter(o=>o.x>-90);
+  coins=coins.filter(c=>c.x>-60&&!c.got);
+  boxes=boxes.filter(b=>b.x>-70&&!b.got);
+  rockets=rockets.filter(r=>r.x>-100);
+
+  if(magnet>0){
+    for(const c of coins){
+      const dx=(car.x+45)-c.x, dy=(car.y+20)-c.y;
+      const d=Math.sqrt(dx*dx+dy*dy);
+      if(d<190){c.x += dx/d*5; c.y += dy/d*5;}
+    }
+  }
+
+  for(const c of coins){
+    const dx=car.x+46-c.x, dy=car.y+24-c.y;
+    if(Math.sqrt(dx*dx+dy*dy)<55){
+      c.got=true; money++; score+=2; burst(c.x,c.y,"#facc15",14);
+    }
+  }
+  for(const b of boxes){
+    if(hit(car,b)){
+      b.got=true; collectBox(); burst(b.x,b.y,"#c084fc",25);
+    }
+  }
+
+  for(const o of obstacles){
+    if(hit(car,o)){
+      if(shield>0||nitro>0){o.x=-99; burst(o.x,o.y,"#facc15",20);}
+      else endGame();
+    }
+  }
+  for(const r of rockets){
+    if(hit(car,r)){
+      if(shield>0){r.x=-99; burst(r.x,r.y,"#60a5fa",22);}
+      else endGame();
+    }
+  }
+}
+function endGame(){
+  gameOver=true;
+  best=Math.max(best,Math.floor(score));
+  localStorage.setItem("elias_car_v4_best",best);
+}
+
+function drawCar(){
+  ctx.save();
+  ctx.translate(car.x,car.y);
+  if(nitro>0){
+    ctx.fillStyle="#f97316";
+    ctx.beginPath();
+    ctx.moveTo(-20,26);ctx.lineTo(-58,12);ctx.lineTo(-42,26);ctx.lineTo(-58,40);ctx.fill();
+  }
+  ctx.fillStyle=nitro>0?"#facc15":"#22c55e";
+  rr(0,10,92,34,12);
+  ctx.fillStyle="#16a34a";
+  rr(18,0,42,25,10);
+  ctx.fillStyle="#bae6fd";
+  rr(28,5,22,14,5);
+  ctx.fillStyle="#0f172a";
+  ctx.beginPath();ctx.arc(22,44,12,0,Math.PI*2);ctx.arc(70,44,12,0,Math.PI*2);ctx.fill();
+  ctx.fillStyle="#e5e7eb";
+  ctx.beginPath();ctx.arc(22,44,5,0,Math.PI*2);ctx.arc(70,44,5,0,Math.PI*2);ctx.fill();
+  ctx.fillStyle="white";
+  ctx.font="bold 18px Arial";
+  ctx.fillText("E",64,31);
+  ctx.restore();
+
+  if(shield>0){
+    ctx.strokeStyle="#60a5fa";ctx.lineWidth=5;
+    ctx.beginPath();ctx.arc(car.x+46,car.y+25,60,0,Math.PI*2);ctx.stroke();
+  }
+  if(magnet>0){
+    ctx.fillStyle="#f472b6";ctx.font="25px Arial";
+    ctx.fillText("🧲",car.x+35,car.y-10);
+  }
+}
+
+function draw(){
+  const bg=ctx.createLinearGradient(0,0,0,440);
+  if(level===1){bg.addColorStop(0,"#67e8f9");bg.addColorStop(.55,"#38bdf8");bg.addColorStop(.56,"#22c55e");bg.addColorStop(1,"#14532d");}
+  if(level===2){bg.addColorStop(0,"#fdba74");bg.addColorStop(.55,"#f97316");bg.addColorStop(.56,"#78350f");bg.addColorStop(1,"#1c1917");}
+  if(level===3){bg.addColorStop(0,"#111827");bg.addColorStop(.55,"#4c1d95");bg.addColorStop(.56,"#7f1d1d");bg.addColorStop(1,"#020617");}
+  ctx.fillStyle=bg;ctx.fillRect(0,0,960,440);
+
+  ctx.fillStyle="rgba(255,255,255,.85)";
+  stars.forEach(s=>ctx.fillRect(s.x,s.y,s.s,s.s));
+
+  ctx.fillStyle="rgba(0,0,0,.3)";
+  ctx.fillRect(0,360,960,80);
+  ctx.strokeStyle="rgba(255,255,255,.7)";
+  ctx.lineWidth=4;
+  ctx.setLineDash([35,30]);
+  ctx.beginPath();ctx.moveTo((-frame*speed)%65,397);ctx.lineTo(960,397);ctx.stroke();
+  ctx.setLineDash([]);
+
+  coins.forEach(c=>{
+    ctx.save();ctx.translate(c.x,c.y);ctx.scale(1+Math.sin(c.t)*.18,1);
+    ctx.fillStyle="#facc15";ctx.beginPath();ctx.arc(0,0,c.r,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle="#111";ctx.font="bold 16px Arial";ctx.textAlign="center";ctx.fillText("€",0,6);
+    ctx.restore();
+  });
+
+  boxes.forEach(b=>{
+    ctx.fillStyle="#a855f7";rr(b.x,b.y,b.w,b.h,10);
+    ctx.fillStyle="white";ctx.font="bold 28px Arial";ctx.fillText("?",b.x+12,b.y+31);
+  });
+
+  obstacles.forEach(o=>{
+    ctx.fillStyle="#ef4444";rr(o.x,o.y,o.w,o.h,8);
+    ctx.fillStyle="rgba(255,255,255,.25)";rr(o.x+6,o.y+6,o.w-12,8,4);
+  });
+
+  rockets.forEach(r=>{
+    ctx.fillStyle="#dc2626";rr(r.x,r.y,r.w,r.h,12);
+    ctx.fillStyle="#f97316";ctx.beginPath();ctx.moveTo(r.x+r.w,r.y+12);ctx.lineTo(r.x+r.w+20,r.y+2);ctx.lineTo(r.x+r.w+20,r.y+22);ctx.fill();
+    ctx.fillStyle="white";ctx.font="18px Arial";ctx.fillText("🚀",r.x+14,r.y+20);
+  });
+
+  drawCar();
+
+  particles.forEach(p=>{
+    ctx.globalAlpha=p.life/28;ctx.fillStyle=p.color;ctx.fillRect(p.x,p.y,5,5);ctx.globalAlpha=1;
+  });
+
+  ctx.fillStyle="rgba(0,0,0,.43)";rr(16,16,360,118,20);
+  ctx.fillStyle="white";ctx.font="bold 23px Arial";
+  ctx.fillText("Score: "+Math.floor(score),36,50);
+  ctx.fillText("💰 Kohle: "+money+"   🏆 "+best,36,82);
+  ctx.fillText("Level: "+level+"  "+(nitro>0?"⚡":shield>0?"🛡️":magnet>0?"🧲":""),36,114);
+
+  if(surpriseTimer>0){
+    ctx.textAlign="center";
+    ctx.fillStyle="#facc15";ctx.font="bold 36px Arial";
+    ctx.fillText(surpriseText,480,82);
+    ctx.textAlign="left";
+  }
+
+  if(!started){
+    ctx.fillStyle="rgba(0,0,0,.55)";ctx.fillRect(0,0,960,440);
+    ctx.textAlign="center";ctx.fillStyle="white";ctx.font="bold 48px Arial";
+    ctx.fillText("Elyas Turbo Car",480,160);
+    ctx.font="24px Arial";
+    ctx.fillText("Mystery-Box sammeln: Nitro, Schild oder Magnet",480,215);
+    ctx.fillText("Tippen oder Leertaste drücken",480,258);
+    ctx.textAlign="left";
+  }
+
+  if(gameOver){
+    ctx.fillStyle="rgba(0,0,0,.65)";ctx.fillRect(0,0,960,440);
+    ctx.textAlign="center";ctx.fillStyle="#facc15";ctx.font="bold 58px Arial";
+    ctx.fillText("CRASH!",480,160);
+    ctx.fillStyle="white";ctx.font="25px Arial";
+    ctx.fillText("Score: "+Math.floor(score)+"   Kohle: "+money+"   Level: "+level,480,215);
+    ctx.fillText("Tippen zum Neustart",480,265);
+    ctx.textAlign="left";
+  }
+}
+function loop(){update();draw();requestAnimationFrame(loop);}
+loop();
+</script>
+</body>
+</html>
